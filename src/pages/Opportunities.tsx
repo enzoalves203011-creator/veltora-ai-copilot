@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Target, AlertTriangle, TrendingDown, RefreshCw, ShoppingCart, Eye, ArrowRight, DollarSign } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useDemo } from '@/contexts/DemoContext';
 import { Button } from '@/components/ui/button';
+import EmptyState from '@/components/onboarding/EmptyState';
 
 const typeConfig: Record<string, { label: string; icon: any; color: string; bg: string }> = {
   churn_risk: { label: 'Risco de Churn', icon: AlertTriangle, color: 'text-destructive', bg: 'bg-destructive/10' },
@@ -23,17 +25,20 @@ const priorityColors: Record<string, string> = {
 
 export default function Opportunities() {
   const navigate = useNavigate();
+  const { isDemoMode, demoData } = useDemo();
 
-  const { data: opportunities } = useQuery({
+  const { data: dbOpportunities } = useQuery({
     queryKey: ['opportunities'],
     queryFn: async () => {
       const { data } = await supabase.from('opportunities').select('*, clients(company_name, city)').order('priority').order('estimated_value', { ascending: false });
       return data || [];
     },
+    enabled: !isDemoMode,
   });
 
-  const totalValue = opportunities?.reduce((sum, o) => sum + Number(o.estimated_value || 0), 0) || 0;
-  const highPriority = opportunities?.filter(o => o.priority === 'high').length || 0;
+  const opportunities = isDemoMode ? demoData.opportunities : (dbOpportunities || []);
+  const totalValue = opportunities.reduce((sum: number, o: any) => sum + Number(o.estimated_value || 0), 0);
+  const highPriority = opportunities.filter((o: any) => o.priority === 'high').length;
 
   const formatCurrency = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`;
 
@@ -51,7 +56,7 @@ export default function Opportunities() {
         <div className="grid grid-cols-3 gap-3">
           <div className="stat-card">
             <p className="text-xs text-muted-foreground">Total detectado</p>
-            <p className="text-xl font-bold font-display">{opportunities?.length || 0}</p>
+            <p className="text-xl font-bold font-display">{opportunities.length}</p>
           </div>
           <div className="stat-card">
             <p className="text-xs text-muted-foreground">Valor estimado</p>
@@ -65,7 +70,7 @@ export default function Opportunities() {
 
         {/* List */}
         <div className="space-y-2">
-          {opportunities?.map((opp, i) => {
+          {opportunities.map((opp: any, i: number) => {
             const cfg = typeConfig[opp.type] || typeConfig.repurchase;
             const Icon = cfg.icon;
             return (
@@ -87,7 +92,7 @@ export default function Opportunities() {
                       </span>
                       <span className={`text-[10px] px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.color}`}>{cfg.label}</span>
                     </div>
-                    <p className="font-semibold text-sm">{(opp as any).clients?.company_name}</p>
+                    <p className="font-semibold text-sm">{opp.clients?.company_name}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{opp.justification}</p>
                     <div className="flex items-center gap-3 mt-2">
                       {opp.estimated_value && (
@@ -98,18 +103,21 @@ export default function Opportunities() {
                       <span className="text-xs text-primary">→ {opp.recommended_action}</span>
                     </div>
                   </div>
-                  <Button variant="ghost" size="sm" className="text-xs" onClick={() => navigate(`/clients/${opp.client_id}`)}>
-                    <ArrowRight className="w-4 h-4" />
-                  </Button>
+                  {!isDemoMode && (
+                    <Button variant="ghost" size="sm" className="text-xs" onClick={() => navigate(`/clients/${opp.client_id}`)}>
+                      <ArrowRight className="w-4 h-4" />
+                    </Button>
+                  )}
                 </div>
               </motion.div>
             );
           })}
-          {(!opportunities || opportunities.length === 0) && (
-            <div className="text-center py-12 text-muted-foreground">
-              <Target className="w-10 h-10 mx-auto mb-3 opacity-30" />
-              <p>Nenhuma oportunidade detectada</p>
-            </div>
+          {opportunities.length === 0 && (
+            <EmptyState
+              icon={Target}
+              title="Nenhuma oportunidade detectada ainda"
+              description="A IA detectará oportunidades após você registrar clientes e vendas."
+            />
           )}
         </div>
       </motion.div>
