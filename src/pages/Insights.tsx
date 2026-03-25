@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Brain, AlertTriangle, Target, TrendingUp, Lightbulb, Star } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useDemo } from '@/contexts/DemoContext';
+import EmptyState from '@/components/onboarding/EmptyState';
 
 const typeConfig: Record<string, { label: string; icon: any; color: string; bg: string; border: string }> = {
   risk: { label: 'Risco', icon: AlertTriangle, color: 'text-destructive', bg: 'bg-destructive/10', border: 'border-destructive/20' },
@@ -13,19 +15,24 @@ const typeConfig: Record<string, { label: string; icon: any; color: string; bg: 
 const priorityLabel: Record<string, string> = { high: 'Alta', medium: 'Média', low: 'Baixa' };
 
 export default function Insights() {
-  const { data: insights } = useQuery({
+  const { isDemoMode, demoData } = useDemo();
+
+  const { data: dbInsights } = useQuery({
     queryKey: ['all-insights'],
     queryFn: async () => {
       const { data } = await supabase.from('ai_insights').select('*, clients(company_name)').eq('status', 'active').order('priority').order('created_at', { ascending: false });
       return data || [];
     },
+    enabled: !isDemoMode,
   });
 
+  const insights = isDemoMode ? demoData.insights : (dbInsights || []);
+
   const grouped = {
-    risk: insights?.filter(i => i.type === 'risk') || [],
-    opportunity: insights?.filter(i => i.type === 'opportunity') || [],
-    behavior: insights?.filter(i => i.type === 'behavior') || [],
-    recommendation: insights?.filter(i => i.type === 'recommendation') || [],
+    risk: insights.filter((i: any) => i.type === 'risk'),
+    opportunity: insights.filter((i: any) => i.type === 'opportunity'),
+    behavior: insights.filter((i: any) => i.type === 'behavior'),
+    recommendation: insights.filter((i: any) => i.type === 'recommendation'),
   };
 
   return (
@@ -68,7 +75,7 @@ export default function Insights() {
                 <span className="text-xs text-muted-foreground">({list.length})</span>
               </div>
               <div className="space-y-2">
-                {list.map((insight, i) => (
+                {list.map((insight: any, i: number) => (
                   <motion.div
                     key={insight.id}
                     initial={{ opacity: 0, x: 8 }}
@@ -87,8 +94,8 @@ export default function Insights() {
                             {priorityLabel[insight.priority]}
                           </span>
                         </div>
-                        {(insight as any).clients?.company_name && (
-                          <p className="text-xs text-muted-foreground mb-1">Cliente: {(insight as any).clients.company_name}</p>
+                        {insight.clients?.company_name && (
+                          <p className="text-xs text-muted-foreground mb-1">Cliente: {insight.clients.company_name}</p>
                         )}
                         <p className="text-sm text-muted-foreground">{insight.description}</p>
                         {insight.recommended_action && (
@@ -106,12 +113,12 @@ export default function Insights() {
           );
         })}
 
-        {(!insights || insights.length === 0) && (
-          <div className="text-center py-16 text-muted-foreground">
-            <Brain className="w-12 h-12 mx-auto mb-4 opacity-30" />
-            <p className="font-display font-semibold">Sem insights no momento</p>
-            <p className="text-sm mt-1">A IA gerará insights conforme os dados forem acumulados</p>
-          </div>
+        {insights.length === 0 && (
+          <EmptyState
+            icon={Brain}
+            title="Aguardando dados"
+            description="A IA começará a analisar seus dados após suas primeiras vendas e visitas."
+          />
         )}
       </motion.div>
     </div>
